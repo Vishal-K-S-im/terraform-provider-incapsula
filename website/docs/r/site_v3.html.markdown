@@ -13,9 +13,22 @@ Full site onboarding example with TF can be found [here](https://docs.imperva.co
 
 ## Example Usage
 
+### Cloud WAF Site (default)
+
 ```hcl
 resource "incapsula_site_v3" "example-site-v3" {
   name = "example.com"
+}
+```
+
+### Imperva for AWS (PUBLIC_CLOUD) Site
+
+```hcl
+resource "incapsula_site_v3" "aws-site" {
+  name       = "my-aws-site"
+  type       = "PUBLIC_CLOUD"
+  cloud_type = "AWS"
+  ref_id     = "cf-dist-E1234567890"
 }
 ```
 
