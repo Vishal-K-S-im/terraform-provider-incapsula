@@ -41,7 +41,7 @@ The following arguments are supported:
 * `type` - (Optional) The website type. Indicates which kind of website is created. Supported values: `CLOUD_WAF` (default) for a website onboarded to Imperva Cloud WAF, `PUBLIC_CLOUD` for a website onboarded to Imperva for a public cloud provider (e.g., Imperva for AWS).
 * `cloud_type` - (Optional) The cloud provider type. Required when `type` is `PUBLIC_CLOUD`. Supported values: `AWS`, `GCP`. This field cannot be changed after creation.
 * `ref_id` - (Optional) Sets the Reference ID. A free-text field that enables you to add a unique identifier to correlate a website in our service with an object on the customer side.
-* `active` - (Optional) Whether the site is active or bypassed by the Imperva network.
+* `active` - (Optional) Whether the site is active or bypassing the Imperva network.
 ## Attributes Reference
 
 The following attributes are exported:

@@ -10,7 +10,7 @@ description: |-
 
 Provides a Cloud Origin Domain resource for connecting AWS origins to Imperva for AWS (PUBLIC_CLOUD) sites.
 
-This resource allows you to register your AWS origin (ALB, NLB, or custom domain) with Imperva, which generates an Imperva origin domain that you configure in your AWS CloudFront distribution to route traffic through Imperva's security layer.
+This resource registers your AWS origin (ALB, NLB, or custom domain) with Imperva. Imperva then generates an origin domain that you configure in your AWS CloudFront distribution to route traffic through Imperva's security layer.
 
 ## Example Usage
 
@@ -50,8 +50,8 @@ resource "incapsula_cloud_origin_domain" "origin" {
 The following arguments are supported:
 
 * `account_id` - (Optional) Numeric identifier of the account to operate on. If not specified, operation will be performed on the account identified by the authentication parameters.
-* `site_id` - (Required) Numeric identifier of the site. The site must be of type `PUBLIC_CLOUD` with `cloud_type = "AWS"`. Cannot be changed after creation.
-* `domain` - (Required) The origin domain (FQDN). Must be a valid fully-qualified domain name such as an AWS ALB or NLB hostname (e.g., `internal-alb-1234567890.us-east-1.elb.amazonaws.com`). Cannot be changed after creation. Maximum 253 characters.
+* `site_id` - (Required) Numeric identifier of the site. The site type must be set to PUBLIC_CLOUD, with cloud_type = "AWS". Cannot be changed after the resource is created.
+* `domain` - (Required) The origin domain (FQDN). Must be a valid fully qualified domain name such as an AWS ALB or NLB hostname (e.g., `internal-alb-1234567890.us-east-1.elb.amazonaws.com`). Cannot be changed after the resource is created. Maximum 253 characters.
 * `region` - (Required) The AWS region where the origin is located. Supported values: `us-east-1`, `us-east-2`, `us-west-1`, `us-west-2`, `eu-west-1`, `eu-west-2`, `eu-west-3`, `eu-central-1`, `eu-north-1`, `ap-northeast-1`, `ap-northeast-2`, `ap-southeast-1`, `ap-southeast-2`, `ap-south-1`, `sa-east-1`.
 * `port` - (Optional) Port number the origin server listens on. Must be 443 or in the range 1024-65535. Default: `443`.
 * `origin_tls_policy` - (Optional) TLS version policy for the connection to the origin. Supported values: `TLS_1_2` (default), `TLS_1_3`.
@@ -62,8 +62,8 @@ The following attributes are exported:
 
 * `id` - The resource ID in format `account_id/site_id/origin_id`.
 * `imperva_origin_domain` - The Imperva-generated routing domain. Use this value as the origin domain in your AWS CloudFront distribution to route traffic through Imperva.
-* `created_at` - Timestamp when the cloud origin domain was created.
-* `updated_at` - Timestamp when the cloud origin domain was last updated.
+* `created_at` - Timestamp when the cloud origin domain resource was created.
+* `updated_at` - Timestamp when the cloud origin domain resource was last updated.
 
 ## Import
 
