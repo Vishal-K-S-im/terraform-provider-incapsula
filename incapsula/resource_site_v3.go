@@ -22,7 +22,7 @@ func resourceSiteV3() *schema.Resource {
 			if oldValue != "" && d.HasChange("account_id") {
 				return fmt.Errorf("account_id cannot be updated for an existing site")
 			}
-			return nil
+			return customizeDiffIsLoadBalancerSite(d)
 		},
 		Importer: &schema.ResourceImporter{
 			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
@@ -95,8 +95,40 @@ func resourceSiteV3() *schema.Resource {
 				Optional:    true,
 				ForceNew:    true,
 			},
+			"is_load_balancer_site": {
+				Description: "(Optional) Whether this site is an IGC load-balancer site. Settable only on creation for PUBLIC_CLOUD sites with cloud_type GCP. When omitted, the value returned by the API is adopted. Changing this value on an existing site never replaces the site; the API rejects the change at apply time.",
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Computed:    true,
+			},
+			"authority_header": {
+				Description: "The authority header assigned by Imperva for an IGC load-balancer site. Populated for IGC load-balancer sites and for a legacy IGC default site; empty for domain sites and non-IGC sites.",
+				Type:        schema.TypeString,
+				Computed:    true,
+			},
 		},
 	}
+}
+
+func customizeDiffIsLoadBalancerSite(d *schema.ResourceDiff) error {
+	if d.Id() == "" || !d.HasChange("is_load_balancer_site") {
+		return nil
+	}
+
+	rawState := d.GetRawState()
+	if rawState.IsNull() || !rawState.IsKnown() || rawState.GetAttr("is_load_balancer_site").IsNull() {
+		return d.Clear("is_load_balancer_site")
+	}
+
+	return nil
+}
+
+func changedLoadBalancerSiteFlag(d *schema.ResourceData) *bool {
+	if !d.HasChange("is_load_balancer_site") {
+		return nil
+	}
+	isLb := d.Get("is_load_balancer_site").(bool)
+	return &isLb
 }
 
 func resourceSiteV3Add(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
@@ -113,6 +145,14 @@ func resourceSiteV3Add(ctx context.Context, d *schema.ResourceData, m interface{
 	}
 	if v, ok := d.GetOk("cloud_type"); ok {
 		siteV3Request.CloudType = v.(string)
+	}
+	rawConfig := d.GetRawConfig()
+	if !rawConfig.IsNull() {
+		lbAttr := rawConfig.GetAttr("is_load_balancer_site")
+		if lbAttr.IsKnown() && !lbAttr.IsNull() {
+			isLb := lbAttr.True()
+			siteV3Request.IsLoadBalancerSite = &isLb
+		}
 	}
 	siteV3Request.Active = d.Get("active").(bool)
 	siteV3Response, diags := client.AddV3Site(&siteV3Request, accountID)
@@ -153,12 +193,15 @@ func resourceSiteV3Update(ctx context.Context, d *schema.ResourceData, m interfa
 		siteV3Request.RefId = d.Get("ref_id").(string)
 	}
 	siteV3Request.Active = d.Get("active").(bool)
+	siteV3Request.IsLoadBalancerSite = changedLoadBalancerSiteFlag(d)
 	siteV3Response, diags := client.UpdateV3Site(&siteV3Request, accountID)
 	if diags != nil && diags.HasError() {
 		log.Printf("[ERROR] failed to update v3 site to Account ID: %s, %v\n", accountID, diags)
+		d.Partial(true)
 		return diags
 	} else if siteV3Response.Errors != nil {
 		log.Printf("[ERROR] Failed to update v3 site to Account ID: %s, %v\n", accountID, siteV3Response.Errors[0].Detail)
+		d.Partial(true)
 		return []diag.Diagnostic{{
 			Severity: diag.Error,
 			Summary:  "Failed to add v3 site",
@@ -250,6 +293,20 @@ func resourceSiteV3Read(ctx context.Context, d *schema.ResourceData, m interface
 			log.Printf("[ERROR] Could not read Incapsula cloud type after get v3 site of Account ID: %s, %s\n", accountID, err)
 			return diag.FromErr(err)
 		}
+	}
+
+	if siteV3Response.Data[0].IsLoadBalancerSite != nil {
+		err = d.Set("is_load_balancer_site", *siteV3Response.Data[0].IsLoadBalancerSite)
+		if err != nil {
+			log.Printf("[ERROR] Could not read Incapsula is_load_balancer_site after get v3 site of Account ID: %s, %s\n", accountID, err)
+			return diag.FromErr(err)
+		}
+	}
+
+	err = d.Set("authority_header", siteV3Response.Data[0].AuthorityHeader)
+	if err != nil {
+		log.Printf("[ERROR] Could not read Incapsula authority_header after get v3 site of Account ID: %s, %s\n", accountID, err)
+		return diag.FromErr(err)
 	}
 
 	d.SetId(strconv.Itoa(siteV3Response.Data[0].Id))

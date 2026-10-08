@@ -1,10 +1,12 @@
 package incapsula
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -63,6 +65,120 @@ func checkResponse(t *testing.T, siteV3Response *SiteV3Response, siteV3Request S
 
 	if siteV3Response.Data[0].Cname != Cname {
 		t.Errorf("Should have  %s site cname. Got: %s", Cname, siteV3Response.Data[0].Cname)
+	}
+}
+
+func TestSiteV3RequestMarshalsIsLoadBalancerSite(t *testing.T) {
+	log.Printf("======================== BEGIN TEST ========================")
+	log.Printf("[DEBUG] Running test client_site_v3_test.TestSiteV3RequestMarshalsIsLoadBalancerSite")
+
+	unset := SiteV3Request{Name: "example.com", SiteType: "PUBLIC_CLOUD"}
+	unsetJSON, err := json.Marshal(unset)
+	if err != nil {
+		t.Fatalf("unexpected marshal error: %s", err)
+	}
+	if strings.Contains(string(unsetJSON), "isLoadBalancerSite") {
+		t.Errorf("Unset is_load_balancer_site should be omitted. Got: %s", string(unsetJSON))
+	}
+
+	trueVal := true
+	set := SiteV3Request{Name: "example.com", SiteType: "PUBLIC_CLOUD", CloudType: "GCP", IsLoadBalancerSite: &trueVal}
+	setJSON, err := json.Marshal(set)
+	if err != nil {
+		t.Fatalf("unexpected marshal error: %s", err)
+	}
+	if !strings.Contains(string(setJSON), "\"isLoadBalancerSite\":true") {
+		t.Errorf("Explicit true is_load_balancer_site should be sent as true. Got: %s", string(setJSON))
+	}
+
+	falseVal := false
+	setFalse := SiteV3Request{Name: "example.com", IsLoadBalancerSite: &falseVal}
+	setFalseJSON, err := json.Marshal(setFalse)
+	if err != nil {
+		t.Fatalf("unexpected marshal error: %s", err)
+	}
+	if !strings.Contains(string(setFalseJSON), "\"isLoadBalancerSite\":false") {
+		t.Errorf("Explicit false is_load_balancer_site should be sent as false. Got: %s", string(setFalseJSON))
+	}
+}
+
+func TestSiteV3ResponseUnmarshalsAuthorityHeader(t *testing.T) {
+	log.Printf("======================== BEGIN TEST ========================")
+	log.Printf("[DEBUG] Running test client_site_v3_test.TestSiteV3ResponseUnmarshalsAuthorityHeader")
+
+	body := "{\"data\":[{\"id\":123,\"name\":\"lb.example.com\",\"type\":\"PUBLIC_CLOUD\",\"cloud\":\"GCP\",\"isLoadBalancerSite\":true,\"authorityHeader\":\"abc-51999737.example.net\"}]}"
+	var resp SiteV3Response
+	if err := json.Unmarshal([]byte(body), &resp); err != nil {
+		t.Fatalf("unexpected unmarshal error: %s", err)
+	}
+	if resp.Data[0].IsLoadBalancerSite == nil || !*resp.Data[0].IsLoadBalancerSite {
+		t.Errorf("Expected isLoadBalancerSite=true. Got: %v", resp.Data[0].IsLoadBalancerSite)
+	}
+	if resp.Data[0].AuthorityHeader != "abc-51999737.example.net" {
+		t.Errorf("Expected authorityHeader to be parsed. Got: %s", resp.Data[0].AuthorityHeader)
+	}
+}
+
+func TestListV3SitesByName(t *testing.T) {
+	log.Printf("======================== BEGIN TEST ========================")
+	log.Printf("[DEBUG] Running test client_site_v3_test.TestListV3SitesByName")
+
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		if req.URL.Path != endpointSiteV3 {
+			t.Errorf("Should have hit %s path. Got: %s", endpointSiteV3, req.URL.Path)
+		}
+		if req.URL.Query().Get("names") != "lb.example.com" {
+			t.Errorf("Should pass names=lb.example.com. Got: %s", req.URL.Query().Get("names"))
+		}
+		if req.URL.Query().Get("caid") != "123" {
+			t.Errorf("Should pass caid=123. Got: %s", req.URL.Query().Get("caid"))
+		}
+		if req.URL.Query().Get("size") != "100" {
+			t.Errorf("Should pass size=100. Got: %s", req.URL.Query().Get("size"))
+		}
+		rw.WriteHeader(200)
+		rw.Write([]byte("{\"data\":[{\"id\":462102065,\"name\":\"lb.example.com\",\"type\":\"PUBLIC_CLOUD\",\"cloud\":\"GCP\",\"accountId\":51999737,\"isLoadBalancerSite\":true,\"authorityHeader\":\"abc-51999737.example.net\"}]}"))
+	}))
+	defer server.Close()
+
+	config := &Config{APIID: "foo", APIKey: "bar", BaseURLAPI: server.URL}
+	client := &Client{config: config, httpClient: &http.Client{}}
+
+	resp, diags := client.ListV3Sites("lb.example.com", "123")
+	if diags != nil && diags.HasError() {
+		t.Fatalf("unexpected diags: %v", diags)
+	}
+	if len(resp.Data) != 1 || resp.Data[0].Id != 462102065 {
+		t.Errorf("Expected one matched site with id 462102065. Got: %+v", resp.Data)
+	}
+	if resp.Data[0].AuthorityHeader != "abc-51999737.example.net" {
+		t.Errorf("Expected authority header on matched site. Got: %s", resp.Data[0].AuthorityHeader)
+	}
+}
+
+func TestFindSiteV3ByNameExactMatch(t *testing.T) {
+	sites := []SiteV3Request{{Id: 1, Name: "LB.example.com"}, {Id: 2, Name: "lb.example.com"}}
+	site, err := findSiteV3ByName(sites, "lb.example.com")
+	if err != nil {
+		t.Fatalf("unexpected error: %s", err)
+	}
+	if site.Id != 2 {
+		t.Errorf("Expected exact-name match id 2. Got: %d", site.Id)
+	}
+}
+
+func TestFindSiteV3ByNameNoMatch(t *testing.T) {
+	_, err := findSiteV3ByName([]SiteV3Request{{Id: 1, Name: "other.example.com"}}, "lb.example.com")
+	if err == nil || !strings.Contains(err.Error(), "no site found") {
+		t.Fatalf("Expected no-match error. Got: %v", err)
+	}
+}
+
+func TestFindSiteV3ByNameDuplicate(t *testing.T) {
+	sites := []SiteV3Request{{Id: 1, Name: "lb.example.com"}, {Id: 2, Name: "lb.example.com"}}
+	_, err := findSiteV3ByName(sites, "lb.example.com")
+	if err == nil || !strings.Contains(err.Error(), "1, 2") {
+		t.Fatalf("Expected duplicate error listing site ids. Got: %v", err)
 	}
 }
 

@@ -218,6 +218,11 @@ const CreateCloudOriginDomain = "create_cloud_origin_domain"
 const ReadCloudOriginDomain = "read_cloud_origin_domain"
 const DeleteCloudOriginDomain = "delete_cloud_origin_domain"
 
+const ReadGcpPscTarget = "read_gcp_psc_target"
+const ReadGcpRegions = "read_gcp_regions"
+const ReadSiteDomains = "read_site_domains"
+const ReadV3SitesByName = "read_v3_sites_by_name"
+
 const CreateAiApplicationSecurityApplication = "create_ai_application_security_application"
 const ReadAiApplicationSecurityApplication = "read_ai_application_security_application"
 const UpdateAiApplicationSecurityApplication = "update_ai_application_security_application"

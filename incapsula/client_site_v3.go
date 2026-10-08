@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	neturl "net/url"
 	"strconv"
 )
 
@@ -14,15 +15,17 @@ const endpointSiteV3 = "/sites-mgmt/v3/sites"
 
 // SiteAddResponse contains the relevant site information when adding an Incapsula managed site
 type SiteV3Request struct {
-	Id           int    `json:"id,omitempty"`
-	AccountId    int    `json:"accountId,omitempty"`
-	CreationTime int64  `json:"creationTime,omitempty"`
-	Cname        string `json:"cname,omitempty"`
-	Name         string `json:"name,omitempty"`
-	SiteType     string `json:"type,omitempty"`
-	CloudType    string `json:"cloud,omitempty"`
-	RefId        string `json:"refId,omitempty"`
-	Active       bool   `json:"active"`
+	Id                 int    `json:"id,omitempty"`
+	AccountId          int    `json:"accountId,omitempty"`
+	CreationTime       int64  `json:"creationTime,omitempty"`
+	Cname              string `json:"cname,omitempty"`
+	Name               string `json:"name,omitempty"`
+	SiteType           string `json:"type,omitempty"`
+	CloudType          string `json:"cloud,omitempty"`
+	RefId              string `json:"refId,omitempty"`
+	Active             bool   `json:"active"`
+	IsLoadBalancerSite *bool  `json:"isLoadBalancerSite,omitempty"`
+	AuthorityHeader    string `json:"authorityHeader,omitempty"`
 }
 
 type SiteV3Response struct {
@@ -262,6 +265,57 @@ func (c *Client) GetV3Site(siteV3Request *SiteV3Request, accountId string) (*Sit
 	}
 
 	log.Printf("[DEBUG] Imperva get v3 site ended successfully for account id: %s", accountId)
+
+	return &siteV3Response, nil
+}
+
+func (c *Client) ListV3Sites(name string, accountId string) (*SiteV3Response, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	log.Printf("[INFO] listing v3 sites by name: %s", name)
+
+	listUrl := fmt.Sprintf("%s%s?names=%s&size=100", c.config.BaseURLAPI, endpointSiteV3, neturl.QueryEscape(name))
+	if accountId != "" {
+		listUrl = fmt.Sprintf("%s&caid=%s", listUrl, neturl.QueryEscape(accountId))
+	}
+
+	resp, err := c.DoJsonAndQueryParamsRequestWithHeaders(http.MethodGet, listUrl, nil, nil, ReadV3SitesByName)
+	if err != nil {
+		diags = append(diags, diag.Diagnostic{
+			Severity: diag.Error,
+			Summary:  "Error response from Imperva service on list v3 sites",
+			Detail:   fmt.Sprintf("Failed to list v3 sites by name %s, %s", name, err.Error()),
+		})
+		return nil, diags
+	}
+	defer resp.Body.Close()
+	responseBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		diags = append(diags, diag.Diagnostic{
+			Severity: diag.Error,
+			Summary:  "Failed to read response from Imperva service on list v3 sites",
+			Detail:   fmt.Sprintf("Failed to read response for name %s, %s", name, err.Error()),
+		})
+		return nil, diags
+	}
+	log.Printf("[DEBUG] Imperva list v3 sites JSON response: %s\n", string(responseBody))
+	if resp.StatusCode != 200 {
+		diags = append(diags, diag.Diagnostic{
+			Severity: diag.Error,
+			Summary:  "Failed to read response from Imperva service on list v3 sites",
+			Detail:   fmt.Sprintf("Failed to list v3 sites by name %s, got response status %d, %s", name, resp.StatusCode, string(responseBody)),
+		})
+		return nil, diags
+	}
+	var siteV3Response SiteV3Response
+	err = json.Unmarshal(responseBody, &siteV3Response)
+	if err != nil {
+		diags = append(diags, diag.Diagnostic{
+			Severity: diag.Error,
+			Summary:  "Failed to parse list v3 sites response",
+			Detail:   fmt.Sprintf("Failed to parse list v3 sites JSON response for name %s, %s", name, err.Error()),
+		})
+		return nil, diags
+	}
 
 	return &siteV3Response, nil
 }

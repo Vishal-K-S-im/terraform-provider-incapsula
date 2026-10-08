@@ -98,6 +98,10 @@ func Provider() *schema.Provider {
 			"incapsula_account_permissions": dataSourceAccountPermissions(),
 			"incapsula_account_roles":       dataSourceAccountRoles(),
 			"incapsula_ssl_instructions":    dataSourceSSLInstructions(),
+			"incapsula_gcp_psc_target":      dataSourceIncapsulaGcpPscTarget(),
+			"incapsula_site_v3":             dataSourceIncapsulaSiteV3(),
+			"incapsula_gcp_domains":         dataSourceIncapsulaGcpDomains(),
+			"incapsula_gcp_regions":         dataSourceIncapsulaGcpRegions(),
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
